@@ -9,3 +9,13 @@
         margin: 0;
     }
 }
+
+.themeisle-sale { 
+    display: none;
+}
+
+#tsdk_banner .themeisle-sale {
+    display: block;
+    margin: 0;
+    margin-bottom: 10px;
+}

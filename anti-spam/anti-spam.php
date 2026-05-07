@@ -3,7 +3,7 @@
  * Plugin Name: Titan Anti-spam & Security
  * Plugin URI: http://wordpress.org/plugins/anti-spam/
  * Description: Titan Security - Anti-spam, Anti-virus, Firewall and Malware Scan
- * Version: 7.5.0
+ * Version: 7.5.1
  * Author: Themeisle
  * Requires PHP: 7.4
  * WordPress Available:  yes
@@ -45,7 +45,7 @@ if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
 
 // This plugin is activated.
 define( 'WTITAN_PLUGIN_ACTIVE', true );
-define( 'WTITAN_PLUGIN_VERSION', '7.5.0' );
+define( 'WTITAN_PLUGIN_VERSION', '7.5.1' );
 define( 'WTITAN_PLUGIN_DIR', __DIR__ );
 define( 'WTITAN_PLUGIN_BASE', plugin_basename( __FILE__ ) );
 define( 'WTITAN_PLUGIN_URL', plugins_url( '', __FILE__ ) );

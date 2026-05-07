@@ -315,6 +315,7 @@ function Dashboard() {
 					maxW="1680px"
 					minW={ 0 }
 				>
+					<div id="tsdk_banner"></div>
 					{ renderPage() }
 				</Box>
 			</Flex>

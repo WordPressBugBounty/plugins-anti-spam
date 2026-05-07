@@ -63,6 +63,7 @@ class Plugin {
 		add_filter( 'themeisle_sdk_products', [ __CLASS__, 'register_sdk' ] );
 		add_filter( 'themeisle_sdk_ran_promos', [ __CLASS__, 'sdk_hide_promo_notice' ] );
 		add_filter( WTITAN_PLUGIN_NAMESPACE . '_logger_data', [ $this, 'get_logger_data' ] );
+		add_filter( 'themeisle_sdk_blackfriday_data', [ $this, 'add_black_friday_data' ] );
 	}
 
 	/**
@@ -294,15 +295,24 @@ class Plugin {
 	 */
 	public function get_survey_data( $data ) {
 		$install_days_number = intval( ( time() - get_option( WTITAN_PLUGIN_NAMESPACE . '_install', time() ) ) / DAY_IN_SECONDS );
+		$license_status      = apply_filters( 'product_titan_license_status', false );
 
-		// TODO: Add license check with the new dashboard.
 		$data = [
 			'environmentId' => 'cmioooiur4v4uad01gmey9tnn',
 			'attributes'    => [
-				'install_days_number' => $install_days_number,
 				'free_version'        => WTITAN_PLUGIN_VERSION,
+				'pro_version'         => defined( 'WTITANP_PLUGIN_VERSION' ) ? WTITANP_PLUGIN_VERSION : '',
+				'install_days_number' => $install_days_number,
+				'license_status'      => $license_status ? $license_status : 'free',
+				'antispam_mode'       => (bool) get_option( 'titan_antispam_mode', true ),
+				'bruteforce_enabled'  => (bool) get_option( 'titan_bruteforce_enabled', false ),
+				'strong_password'     => (bool) get_option( 'titan_strong_password', false ),
 			],
 		];
+
+		if ( 'valid' === $license_status ) {
+			$data['attributes']['license_key'] = apply_filters( 'themeisle_sdk_secret_masking', apply_filters( 'product_' . WTITAN_PLUGIN_NAMESPACE . '_license_key', '' ) );
+		}
 
 		return $data;
 	}
@@ -316,7 +326,72 @@ class Plugin {
 	 */
 	public function mark_internal_page( $hook_suffix ) {
 		if ( false !== strpos( $hook_suffix, 'titan-' ) ) {
-			do_action( 'themeisle_internal_page', WTITAN_PLUGIN_DIR, 'dashboard' );
+			do_action( 'themeisle_internal_page', WTITAN_PLUGIN_SLUG, 'dashboard' );
 		}
+	}
+
+	/**
+	 * Set the black friday data.
+	 *
+	 * @param array<string, mixed> $configs The configuration array for the loaded products.
+	 *
+	 * @return array<string, mixed> The configurations.
+	 */
+	public function add_black_friday_data( $configs ) {
+		$config = $configs['default'];
+
+		$message   = __( 'ML spam detection, malware scanning, two-factor authentication. Stop relying on basic spam filters. Exclusively for existing Titan users.', 'anti-spam' );
+		$cta_label = __( 'Get Titan Pro', 'anti-spam' );
+
+		$plan             = apply_filters( 'product_titan_license_plan', 0 );
+		$license          = apply_filters( 'product_titan_license_key', false );
+		$status           = apply_filters( 'product_titan_license_status', false );
+		$pro_product_slug = defined( 'WTITANP_PLUGIN_FILE' ) ? basename( dirname( WTITANP_PLUGIN_FILE ) ) : '';
+
+		$is_pro     = 'valid' === $status;
+		$is_expired = 'expired' === $status || 'active-expired' === $status;
+
+		if ( $is_pro ) {
+			// translators: %s is the discount percentage.
+			$config['plugin_meta_message'] = sprintf( __( 'Black Friday Sale - up to %s off', 'anti-spam' ), '30%' );
+			// translators: %1$s the discount percentage, %2$s the renewal discount percentage.
+			$message   = sprintf( __( 'Upgrade your Titan Pro plan: %1$s off this week. Already on the plan you need? Renew early and save up to %2$s.', 'anti-spam' ), '30%', '20%' );
+			$cta_label = __( 'See your options', 'anti-spam' );
+		} elseif ( $is_expired ) {
+			// translators: %s is the discount percentage.
+			$config['upgrade_menu_text'] = sprintf( __( 'BF Sale - %s off', 'anti-spam' ), '50%' );
+			// translators: %s is the discount percentage.
+			$config['plugin_meta_message'] = sprintf( __( 'Black Friday Sale - %s off', 'anti-spam' ), '50%' );
+			$message                       = __( 'Your Titan Pro features are still here, just locked. Renew at a reduced rate this week.', 'anti-spam' );
+			$cta_label                     = __( 'Reactivate now', 'anti-spam' );
+		} else {
+			// translators: %s - discount.
+			$config['title'] = sprintf( __( 'Titan Pro: %s off this week', 'anti-spam' ), '60%' );
+			// translators: %s is the discount percentage.
+			$config['plugin_meta_message'] = sprintf( __( 'Black Friday Sale - %s off', 'anti-spam' ), '60%' );
+			// translators: %s is the discount percentage.
+			$config['upgrade_menu_text'] = sprintf( __( 'BF Sale - %s off', 'anti-spam' ), '60%' );
+		}
+
+		$url_params = [
+			'utm_term' => $is_pro ? 'plan-' . $plan : 'free',
+			'lkey'     => ! empty( $license ) ? $license : false,
+			'expired'  => $is_expired ? '1' : false,
+		];
+
+		if ( ( $is_pro || $is_expired ) && ! empty( $pro_product_slug ) ) {
+			$config['plugin_meta_targets'] = [ $pro_product_slug ];
+		}
+
+		$config['cta_label'] = $cta_label;
+		$config['message']   = $message;
+		$config['sale_url']  = add_query_arg(
+			$url_params,
+			tsdk_translate_link( tsdk_utmify( 'https://themeisle.link/titan-bf', 'bfcm', 'titan' ) )
+		);
+
+		$configs[ WTITAN_PLUGIN_SLUG ] = $config;
+
+		return $configs;
 	}
 }
