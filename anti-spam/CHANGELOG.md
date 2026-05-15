@@ -1,3 +1,8 @@
+#####   Version 7.5.2 (2026-05-15)
+
+- Updated dependencies.
+- Fixed an issue where the machine-learning spam analyzer cron scheduler did not correctly process the comments. (Pro)
+
 #####   Version 7.5.1 (2026-05-07)
 
 - Update dependenceis

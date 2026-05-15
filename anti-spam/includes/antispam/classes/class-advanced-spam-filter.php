@@ -2,7 +2,7 @@
 /**
  * Advanced Spam Filter Class
  *
- * Async ML-based spam detection using the Titan API and Action Scheduler.
+ * Async ML-based spam detection using the Titan API and WP-Cron.
  *
  * @package WBCR\Titan\Antispam
  */
@@ -47,15 +47,6 @@ class Advanced_Spam_Filter {
 	 */
 	private const BATCH_SIZE = 100;
 
-	/**
-	 * Interval between send batches in seconds.
-	 */
-	private const SEND_INTERVAL = 30 * MINUTE_IN_SECONDS;
-
-	/**
-	 * Interval between poll batches in seconds.
-	 */
-	private const POLL_INTERVAL = 30 * MINUTE_IN_SECONDS;
 
 	/**
 	 * Seconds a per-comment send lock is held (5 minutes).
@@ -68,14 +59,19 @@ class Advanced_Spam_Filter {
 	private const STALE_THRESHOLD = 3600;
 
 	/**
-	 * Action Scheduler hook for sending batches.
+	 * Cron hook for sending batches.
 	 */
 	private const ACTION_SEND = 'titan_spam_batch_enqueue_spam';
 
 	/**
-	 * Action Scheduler hook for polling batches.
+	 * Cron hook for polling batches.
 	 */
 	private const ACTION_POLL = 'titan_spam_batch_check_status';
+
+	/**
+	 * Custom cron schedule key shared by both recurring events.
+	 */
+	private const CRON_SCHEDULE = 'titan_thirty_minutes';
 
 	/**
 	 * Spam reason used for stats tracking.
@@ -88,6 +84,10 @@ class Advanced_Spam_Filter {
 	 * Registers hooks only when the feature is enabled.
 	 */
 	public function __construct() {
+		// Keep the recurrence available while scheduled events exist.
+		// phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- Filtered and clamped below.
+		add_filter( 'cron_schedules', [ $this, 'register_cron_schedule' ] );
+
 		if ( ! $this->is_enabled() ) {
 			return;
 		}
@@ -105,6 +105,31 @@ class Advanced_Spam_Filter {
 	}
 
 	/**
+	 * Register the custom 30-minute cron recurrence used by both batch jobs.
+	 *
+	 * @param array<string, array{interval: int, display: string}> $schedules Existing schedules.
+	 *
+	 * @return array<string, array{interval: int, display: string}>
+	 */
+	public function register_cron_schedule( array $schedules ): array {
+		/**
+		 * Filters the recurring interval (in seconds) for Titan's spam batch cron jobs.
+		 *
+		 * Values below 15 minutes are clamped to the WPCS cron floor.
+		 *
+		 * @param int $interval Interval in seconds.
+		 */
+		$interval = (int) apply_filters( 'titan_spam_cron_interval', 30 * MINUTE_IN_SECONDS );
+		$interval = max( 15 * MINUTE_IN_SECONDS, $interval );
+
+		$schedules[ self::CRON_SCHEDULE ] = [
+			'interval' => $interval,
+			'display'  => __( 'Titan spam batch scan interval', 'anti-spam' ),
+		];
+		return $schedules;
+	}
+
+	/**
 	 * Check if the advanced spam filter is enabled.
 	 *
 	 * @return bool
@@ -115,37 +140,38 @@ class Advanced_Spam_Filter {
 	}
 
 	/**
-	 * Ensure recurring Action Scheduler actions are scheduled.
+	 * Ensure both recurring WP-Cron events are scheduled.
 	 *
 	 * @return void
 	 */
 	private function ensure_scheduled_actions(): void {
-		if ( ! function_exists( 'as_has_scheduled_action' ) ) {
-			return;
+		$this->purge_legacy_action_scheduler_actions();
+
+		if ( false === wp_next_scheduled( self::ACTION_SEND ) ) {
+			wp_schedule_event( time(), self::CRON_SCHEDULE, self::ACTION_SEND );
 		}
 
-		// Avoid DB queries on every page load — check once per hour.
-		$transient_key = 'titan_spam_actions_scheduled';
-		if ( get_transient( $transient_key ) ) {
-			return;
-		}
-
-		$needs_update = false;
-
-		if ( ! as_has_scheduled_action( self::ACTION_SEND ) ) {
-			as_schedule_recurring_action( time(), self::SEND_INTERVAL, self::ACTION_SEND );
-			$needs_update = true;
-		}
-
-		if ( ! as_has_scheduled_action( self::ACTION_POLL ) ) {
+		if ( false === wp_next_scheduled( self::ACTION_POLL ) ) {
 			// Offset by ~7 minutes so send and poll don't run simultaneously.
-			as_schedule_recurring_action( time() + 420, self::POLL_INTERVAL, self::ACTION_POLL );
-			$needs_update = true;
+			wp_schedule_event( time() + 7 * MINUTE_IN_SECONDS, self::CRON_SCHEDULE, self::ACTION_POLL );
 		}
+	}
 
-		if ( ! $needs_update ) {
-			set_transient( $transient_key, 1, HOUR_IN_SECONDS );
+	/**
+	 * Remove legacy Action Scheduler rows once.
+	 *
+	 * @return void
+	 */
+	private function purge_legacy_action_scheduler_actions(): void {
+		if ( get_option( 'titan_spam_migrated_from_action_scheduler' ) ) {
+			return;
 		}
+		if ( ! function_exists( 'as_unschedule_all_actions' ) ) {
+			return;
+		}
+		as_unschedule_all_actions( self::ACTION_SEND );
+		as_unschedule_all_actions( self::ACTION_POLL );
+		update_option( 'titan_spam_migrated_from_action_scheduler', 1, false );
 	}
 
 	/**
@@ -203,7 +229,7 @@ class Advanced_Spam_Filter {
 
 		/**
 		 * The list of comments to process (prioritizing enqueued, then failed).
-		 * 
+		 *
 		 * @var WP_Comment[] $comments The comments to process.
 		 */
 		$comments = get_comments(
@@ -219,7 +245,7 @@ class Advanced_Spam_Filter {
 		if ( empty( $comments ) ) {
 			/**
 			 * The list of comments to process (failed retries).
-			 * 
+			 *
 			 * @var WP_Comment[] $comments The comments to process.
 			 */
 			$comments = get_comments(
@@ -256,8 +282,7 @@ class Advanced_Spam_Filter {
 				continue;
 			}
 
-			// Short-lived transient lock prevents duplicate sends when
-			// overlapping Action Scheduler runners pick up the same comment.
+			// Keep duplicate sends out during overlapping cron runs.
 			$lock_key = 'titan_spam_sending_' . $comment_id;
 			if ( get_transient( $lock_key ) ) {
 				Writter::debug( sprintf( 'Comment #%d already being processed by another worker, skipping', $comment_id ) );
@@ -311,7 +336,7 @@ class Advanced_Spam_Filter {
 
 		/**
 		 * The list of comments to check.
-		 * 
+		 *
 		 * @var WP_Comment[] $comments The comments to check.
 		 */
 		$comments = get_comments(

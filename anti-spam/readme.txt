@@ -4,7 +4,7 @@ Tags: antispam, spam protection, brute force protection, security, two factor au
 Requires at least: 5.6
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 7.5.1
+Stable tag: 7.5.2
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl.html
 
@@ -227,9 +227,10 @@ For additional information about Titan and Pro features, visit: https://titansit
 
 == Changelog ==
 
-#####   Version 7.5.1 (2026-05-07)
+#####   Version 7.5.2 (2026-05-15)
 
-- Update dependenceis
+- Updated dependencies.
+- Fixed an issue where the machine-learning spam analyzer cron scheduler did not correctly process the comments. (Pro)
 
 
 

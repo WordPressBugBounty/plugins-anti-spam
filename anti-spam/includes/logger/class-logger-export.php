@@ -110,7 +110,7 @@ class Export {
 		}
 
 		if ( ! $zip->close() ) {
-			\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to close ZIP archive %s for unknown reason. \ZipArchive::close() failed.' ) );
+			\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to close ZIP archive %s for unknown reason. \ZipArchive::close() failed.', $zip_save_path ) );
 		}
 
 		if ( isset( $system_info_path ) ) {

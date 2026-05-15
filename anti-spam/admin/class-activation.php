@@ -53,6 +53,9 @@ class Activation {
 	public static function deactivate() {
 		\WBCR\Titan\Logger\Writter::info( 'Plugin starts deactivate [START].' );
 
+		wp_unschedule_hook( 'titan_spam_batch_enqueue_spam' );
+		wp_unschedule_hook( 'titan_spam_batch_check_status' );
+
 		if ( function_exists( 'as_unschedule_all_actions' ) ) {
 			as_unschedule_all_actions( 'titan_spam_batch_enqueue_spam' );
 			as_unschedule_all_actions( 'titan_spam_batch_check_status' );

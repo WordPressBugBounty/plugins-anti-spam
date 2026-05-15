@@ -935,9 +935,9 @@ class Limit_Login_Attempts {
 	/**
 	 * Clean up old lockouts and retries, and save supplied arrays
 	 *
-	 * @param null $retries
-	 * @param null $lockouts
-	 * @param null $valid
+	 * @param array<mixed>|null $retries  Retries map keyed by IP/hash.
+	 * @param array<mixed>|null $lockouts Lockouts map keyed by IP/hash.
+	 * @param array<mixed>|null $valid    Retry-validity timestamps keyed by IP/hash.
 	 */
 	public function cleanup( $retries = null, $lockouts = null, $valid = null ) {
 		$now      = time();
