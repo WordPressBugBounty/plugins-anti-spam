@@ -54,6 +54,9 @@ class Plugin {
 		require_once WTITAN_PLUGIN_DIR . '/admin/class-rest-controller.php';
 		\WBCR\Titan\Titan_Rest_Controller::get_instance();
 
+		require_once WTITAN_PLUGIN_DIR . '/includes/abilities/class-abilities.php';
+		\WBCR\Titan\Titan_Abilities::init();
+
 		$this->global_scripts();
 
 		if ( is_admin() ) {

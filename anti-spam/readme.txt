@@ -2,9 +2,9 @@
 Contributors: themeisle
 Tags: antispam, spam protection, brute force protection, security, two factor authentication
 Requires at least: 5.6
-Tested up to: 6.9
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 7.5.2
+Stable tag: 7.5.3
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl.html
 
@@ -227,10 +227,11 @@ For additional information about Titan and Pro features, visit: https://titansit
 
 == Changelog ==
 
-#####   Version 7.5.2 (2026-05-15)
+#####   Version 7.5.3 (2026-09-30)
 
-- Updated dependencies.
-- Fixed an issue where the machine-learning spam analyzer cron scheduler did not correctly process the comments. (Pro)
+- Fixed wp-admin crashes when older Titan Pro versions load with the updated security plugin.
+- Added AI agent support: let AI assistants read and change your Titan Security settings.
+- Updated dependencies
 
 
 

@@ -3,7 +3,7 @@
  * Plugin Name: Titan Anti-spam & Security
  * Plugin URI: http://wordpress.org/plugins/anti-spam/
  * Description: Titan Security - Anti-spam, Anti-virus, Firewall and Malware Scan
- * Version: 7.5.2
+ * Version: 7.5.3
  * Author: Themeisle
  * Requires PHP: 7.4
  * WordPress Available:  yes
@@ -45,7 +45,7 @@ if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
 
 // This plugin is activated.
 define( 'WTITAN_PLUGIN_ACTIVE', true );
-define( 'WTITAN_PLUGIN_VERSION', '7.5.2' );
+define( 'WTITAN_PLUGIN_VERSION', '7.5.3' );
 define( 'WTITAN_PLUGIN_DIR', __DIR__ );
 define( 'WTITAN_PLUGIN_BASE', plugin_basename( __FILE__ ) );
 define( 'WTITAN_PLUGIN_URL', plugins_url( '', __FILE__ ) );
@@ -64,32 +64,68 @@ if ( ! defined( 'WTITAN_PLUGIN_API' ) ) {
 	define( 'WTITAN_PLUGIN_API', 'https://api.titansitescanner.com/api/v2/' );
 }
 
+/**
+ * Unhook the legacy premium loader for the current request.
+ *
+ * Deactivating a plugin only rewrites the active_plugins option; callbacks it
+ * already registered still run. Premium <= 1.5.x loads at plugins_loaded 20 and
+ * calls methods dropped in 7.5.0, which fatals before the deactivation takes
+ * effect on the next request.
+ *
+ * @return void
+ */
+function titan_unhook_legacy_premium_loader() {
+	$callback = 'titanp_premium_load';
+
+	if ( ! function_exists( $callback ) ) {
+		return;
+	}
+
+	$priority = has_action( 'plugins_loaded', $callback );
+
+	while ( is_int( $priority ) ) {
+		remove_action( 'plugins_loaded', $callback, $priority );
+		$priority = has_action( 'plugins_loaded', $callback );
+	}
+}
+
+/**
+ * Deactivate an incompatible Titan Security Pro and stop it loading right away.
+ *
+ * @return void
+ */
+function titan_check_premium_compatibility() {
+	// Premium >= 1.6.0 defines this at file scope, so it is already set here.
+	if ( defined( 'WTITANP_COMPATIBILITY' ) ) {
+		return;
+	}
+
+	// Detected by function, not by path, so a repackaged folder is still caught.
+	if ( function_exists( 'titanp_premium_load' ) ) {
+		titan_unhook_legacy_premium_loader();
+	}
+
+	$premium_plugin_file = 'wp-plugin-titan-premium/titan-premium.php';
+	$premium_plugin_path = WP_PLUGIN_DIR . '/' . $premium_plugin_file;
+
+	if ( ! file_exists( $premium_plugin_path ) ) {
+		return;
+	}
+
+	if ( ! function_exists( 'is_plugin_active' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	}
+
+	if ( ! is_plugin_active( $premium_plugin_file ) ) {
+		return;
+	}
+
+	deactivate_plugins( $premium_plugin_file );
+	set_transient( 'wtitan_premium_version_incompatible', true, WEEK_IN_SECONDS );
+}
+
 // START: Related to premium version compatibility check for Titan Security Pro.
-add_action(
-	'plugins_loaded',
-	function () {
-		$premium_plugin_file = 'wp-plugin-titan-premium/titan-premium.php';
-		$premium_plugin_path = WP_PLUGIN_DIR . '/' . $premium_plugin_file;
-
-		if ( ! file_exists( $premium_plugin_path ) ) {
-			return;
-		}
-
-		if ( ! function_exists( 'is_plugin_active' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/plugin.php';
-		}
-
-		if ( ! is_plugin_active( $premium_plugin_file ) ) {
-			return;
-		}
-
-		if ( ! defined( 'WTITANP_COMPATIBILITY' ) ) {
-			deactivate_plugins( $premium_plugin_file );
-			set_transient( 'wtitan_premium_version_incompatible', true, WEEK_IN_SECONDS );
-		}
-	},
-	5
-);
+add_action( 'plugins_loaded', 'titan_check_premium_compatibility', 5 );
 
 add_action(
 	'admin_init',
@@ -162,6 +198,30 @@ function titan_sdk_about_page() {
 		'has_upgrade_menu' => ! defined( 'WTITANP_PLUGIN_VERSION' ),
 		'upgrade_link'     => $upgrade_url,
 		'upgrade_text'     => __( 'Upgrade to Pro', 'anti-spam' ),
+	];
+}
+
+add_filter( WTITAN_PLUGIN_NAMESPACE . '_ai_connect_metadata', 'titan_sdk_ai_connect' );
+
+/**
+ * AI Connect metadata: the copy and abilities offered to the user's AI agent.
+ *
+ * @return array<string, mixed>
+ */
+function titan_sdk_ai_connect() {
+	return [
+		'name'           => 'Titan Security',
+		'notice_cases'   => [
+			__( 'unblock a locked-out visitor', 'anti-spam' ),
+			__( 'review your security audit findings', 'anti-spam' ),
+			__( 'check your protection rules', 'anti-spam' ),
+		],
+		'prompts'        => [
+			__( 'I am locked out from 203.0.113.10. Unblock it.', 'anti-spam' ),
+			__( 'Back up my site now with Titan Security.', 'anti-spam' ),
+			__( 'Show me the high-severity security findings and how to fix each one.', 'anti-spam' ),
+		],
+		'ability_prefix' => 'titan',
 	];
 }
 

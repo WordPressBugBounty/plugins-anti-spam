@@ -1,3 +1,9 @@
+#####   Version 7.5.3 (2026-09-30)
+
+- Fixed wp-admin crashes when older Titan Pro versions load with the updated security plugin.
+- Added AI agent support: let AI assistants read and change your Titan Security settings.
+- Updated dependencies
+
 #####   Version 7.5.2 (2026-05-15)
 
 - Updated dependencies.

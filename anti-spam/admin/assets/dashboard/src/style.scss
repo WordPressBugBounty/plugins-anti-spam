@@ -19,3 +19,20 @@
     margin: 0;
     margin-bottom: 10px;
 }
+
+// The SDK's AI Connect notice: dressed like the dashboard cards (same border,
+// radius and spacing) instead of a stock admin notice. The SDK sets its own
+// values with !important, so these do too.
+#tsdk_banner .ti-ai-notice.notice {
+    margin: 0 0 24px !important;
+    padding: 16px 44px 16px 20px !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 4px solid #2271b1 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+#tsdk_banner .ti-ai-notice .notice-dismiss {
+    top: 4px !important;
+    right: 4px !important;
+}
