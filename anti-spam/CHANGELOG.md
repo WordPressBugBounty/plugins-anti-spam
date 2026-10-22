@@ -1,3 +1,7 @@
+#####   Version 7.5.4 (2026-10-22)
+
+- Updated dependencies
+
 #####   Version 7.5.3 (2026-09-30)
 
 - Fixed wp-admin crashes when older Titan Pro versions load with the updated security plugin.
