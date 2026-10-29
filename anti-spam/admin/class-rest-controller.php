@@ -22,6 +22,11 @@ class Titan_Rest_Controller {
 	private const ALLOWED_STORAGE_TYPES = [ 'local', 'ftp', 'dropbox' ];
 
 	/**
+	 * Admin-post action and nonce action for the logs download.
+	 */
+	private const EXPORT_LOGS_ACTION = 'titan_export_logs';
+
+	/**
 	 * Singleton instance
 	 *
 	 * @var Titan_Rest_Controller|null
@@ -33,6 +38,7 @@ class Titan_Rest_Controller {
 	 */
 	private function __construct() {
 		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'admin_post_' . self::EXPORT_LOGS_ACTION, [ $this, 'download_logs_export' ] );
 	}
 
 	/**
@@ -1159,38 +1165,18 @@ class Titan_Rest_Controller {
 	}
 
 	/**
-	 * Export logs as ZIP
+	 * Get the admin-only URL that downloads the logs ZIP.
 	 *
-	 * @return \WP_REST_Response|\WP_Error
+	 * @return \WP_REST_Response
 	 */
-	public function export_logs() {
-		require_once WTITAN_PLUGIN_DIR . '/includes/logger/class-logger-export.php';
-
-		$export = new \WBCR\Titan\Logger\Export();
-
-		if ( ! $export->prepare() ) {
-			return new \WP_Error(
-				'export_failed',
-				__( 'Failed to prepare log export.', 'anti-spam' ),
-				[ 'status' => 500 ]
-			);
-		}
-
-		$uploads        = wp_get_upload_dir();
-		$save_base_path = isset( $uploads['basedir'] ) ? $uploads['basedir'] : null;
-		$zip_file_name  = sprintf( 'titan_debug_report-%s.zip', gmdate( 'Y-m-d' ) );
-		$zip_file_path  = $save_base_path . DIRECTORY_SEPARATOR . $zip_file_name;
-
-		if ( ! file_exists( $zip_file_path ) ) {
-			return new \WP_Error(
-				'export_not_found',
-				__( 'Export file not found.', 'anti-spam' ),
-				[ 'status' => 404 ]
-			);
-		}
-
-		$upload_url = isset( $uploads['baseurl'] ) ? $uploads['baseurl'] : '';
-		$file_url   = $upload_url . '/' . $zip_file_name;
+	public function export_logs(): \WP_REST_Response {
+		$file_url = add_query_arg(
+			[
+				'action'   => self::EXPORT_LOGS_ACTION,
+				'_wpnonce' => wp_create_nonce( self::EXPORT_LOGS_ACTION ),
+			],
+			admin_url( 'admin-post.php' )
+		);
 
 		return new \WP_REST_Response(
 			[
@@ -1200,6 +1186,26 @@ class Titan_Rest_Controller {
 			],
 			200
 		);
+	}
+
+	/**
+	 * Stream the logs ZIP to an administrator and delete it afterwards.
+	 */
+	public function download_logs_export(): void {
+		check_admin_referer( self::EXPORT_LOGS_ACTION );
+
+		if ( ! $this->check_permissions() ) {
+			wp_die( esc_html__( 'Sorry, you are not allowed to export logs.', 'anti-spam' ), '', [ 'response' => 403 ] );
+		}
+
+		require_once WTITAN_PLUGIN_DIR . '/includes/logger/class-logger-export.php';
+
+		$export = new \WBCR\Titan\Logger\Export();
+
+		if ( ! $export->prepare() || ! $export->download() ) {
+			$export->delete_temp_archive();
+			wp_die( esc_html__( 'Failed to prepare log export.', 'anti-spam' ), '', [ 'response' => 500 ] );
+		}
 	}
 
 	/**

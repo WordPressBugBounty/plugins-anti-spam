@@ -1,3 +1,7 @@
+#####   Version 7.5.5 (2026-10-28)
+
+- Enhanced Security
+
 #####   Version 7.5.4 (2026-10-22)
 
 - Updated dependencies

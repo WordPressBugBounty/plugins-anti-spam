@@ -63,19 +63,15 @@ class Export {
 			return false;
 		}
 
-		$uploads = wp_get_upload_dir();
-
-		if ( isset( $uploads['error'] ) && false !== $uploads['error'] ) {
-			\WBCR\Titan\Logger\Writter::error( 'Unable to get save path of ZIP archive from wp_get_upload_dir()' );
-
-			return false;
+		if ( ! function_exists( 'wp_tempnam' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
 		}
 
-		$save_base_path   = isset( $uploads['basedir'] ) ? $uploads['basedir'] : null;
-		$zip_archive_name = sprintf( 'titan_debug_report-%s.zip', date( 'Y-m-d' ) );
-		$zip_save_path    = $save_base_path . DIRECTORY_SEPARATOR . $zip_archive_name;
+		// Random temporary filename; download() deletes it before output.
+		$zip_save_path            = wp_tempnam( 'titan_debug_report' );
+		$this->_archive_save_path = $zip_save_path;
 
-		if ( ! $zip->open( $zip_save_path, \ZipArchive::CREATE ) ) {
+		if ( true !== $zip->open( $zip_save_path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE ) ) {
 			\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to created ZIP archive in path %s. Skipping export...', $zip_save_path ) );
 
 			return false;
@@ -97,28 +93,13 @@ class Export {
 
 		$system_info = $this->prepare_system_info();
 
-		if ( ! empty( $system_info ) ) {
-			$system_info_file_name = 'titan-system-info.txt';
-			$system_info_path      = $save_base_path . DIRECTORY_SEPARATOR . $system_info_file_name;
-			if ( false !== @file_put_contents( $system_info_path, $system_info ) ) {
-				if ( ! $zip->addFile( $system_info_path, $system_info_file_name ) ) {
-					\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to add %s to %s archive. Skipping it.', $system_info_file_name, $system_info_path ) );
-				}
-			} else {
-				\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to save %s in %s', $system_info_file_name, $zip_save_path ) );
-			}
+		if ( ! empty( $system_info ) && ! $zip->addFromString( 'titan-system-info.txt', $system_info ) ) {
+			\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to add titan-system-info.txt to %s archive. Skipping it.', $zip_save_path ) );
 		}
 
 		if ( ! $zip->close() ) {
 			\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to close ZIP archive %s for unknown reason. \ZipArchive::close() failed.', $zip_save_path ) );
 		}
-
-		if ( isset( $system_info_path ) ) {
-			// Clean-up as this is just temp file.
-			@unlink( $system_info_path );
-		}
-
-		$this->_archive_save_path = $zip_save_path;
 
 		return true;
 	}
@@ -202,7 +183,7 @@ class Export {
 
 		$zip_content = @file_get_contents( $zip_save_path );
 
-		if ( false === $zip_save_path ) {
+		if ( false === $zip_content ) {
 			\WBCR\Titan\Logger\Writter::error( sprintf( 'Failed to get ZIP %s content as file_get_contents() returned false', $zip_save_path ) );
 
 			return false;

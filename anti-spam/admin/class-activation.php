@@ -28,7 +28,39 @@ class Activation {
 
 		require_once WTITAN_PLUGIN_DIR . '/includes/bruteforce/do_activate.php';
 
+		self::remove_public_log_exports();
+
 		\WBCR\Titan\Logger\Writter::info( $log_message );
+	}
+
+	/**
+	 * Delete log export archives that older versions left in the public uploads root.
+	 */
+	public static function remove_public_log_exports(): void {
+		if ( get_option( 'titan_public_log_exports_removed' ) ) {
+			return;
+		}
+
+		$uploads = wp_get_upload_dir();
+
+		if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) ) {
+			return;
+		}
+
+		$archives       = glob( trailingslashit( $uploads['basedir'] ) . 'titan_debug_report-*.zip' );
+		$public_files   = false === $archives ? [] : $archives;
+		$public_files[] = trailingslashit( $uploads['basedir'] ) . 'titan-system-info.txt';
+
+		foreach ( $public_files as $file ) {
+			wp_delete_file( $file );
+		}
+
+		// Retry on a later load if anything could not be deleted.
+		if ( [] !== array_filter( $public_files, 'file_exists' ) ) {
+			return;
+		}
+
+		update_option( 'titan_public_log_exports_removed', true );
 	}
 
 	/**
